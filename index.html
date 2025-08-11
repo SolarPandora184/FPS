@@ -1,112 +1,292 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>3D Zombie Shooter</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Iframe Host / URL Viewer</title>
   <style>
-    body { margin: 0; overflow: hidden; background: #000; }
-    canvas { display: block; }
+    :root{
+      --bg:#0f1724; --card:#0b1220; --accent:#7cc4ff; --muted:#9aa8b8;
+      --glass: rgba(255,255,255,0.03);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%; margin:0; font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+    body{
+      background: linear-gradient(180deg,var(--bg), #071024 120%);
+      color:#e6f0fb;
+      display:flex; flex-direction:column;
+      min-height:100vh;
+      gap:12px;
+      padding:18px;
+    }
+
+    .top {
+      display:flex; gap:12px; align-items:center;
+      max-width:1100px; width:100%; margin:0 auto;
+    }
+    .brand {
+      display:flex; gap:10px; align-items:center;
+      min-width:0;
+    }
+    .logo {
+      width:44px; height:44px; border-radius:9px;
+      background:linear-gradient(135deg,var(--accent),#5ec0d6);
+      display:flex; align-items:center; justify-content:center;
+      font-weight:700; color:#062031; font-family:monospace;
+    }
+    h1{font-size:1.05rem; margin:0}
+    p.lead{margin:0; color:var(--muted); font-size:0.9rem}
+
+    .controls {
+      margin-left:auto;
+      display:flex; gap:8px; align-items:center;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border-radius:12px; padding:12px; width:100%;
+      box-shadow: 0 6px 20px rgba(2,6,23,0.6);
+      border:1px solid rgba(255,255,255,0.03);
+    }
+
+    form { display:flex; gap:8px; align-items:center; width:100%;}
+    input[type="url"], select {
+      flex:1; padding:10px 12px; border-radius:8px; outline:none;
+      border:1px solid rgba(255,255,255,0.05);
+      background:var(--glass); color:inherit; font-size:0.95rem;
+    }
+    button {
+      background:var(--accent); color:#042033; border:none; padding:10px 14px;
+      border-radius:8px; cursor:pointer; font-weight:600;
+    }
+    button.ghost{
+      background:transparent; color:var(--muted); border:1px solid rgba(255,255,255,0.04);
+    }
+
+    .meta {
+      display:flex; gap:10px; align-items:center; margin-top:8px; color:var(--muted); font-size:0.9rem;
+      flex-wrap:wrap;
+    }
+    .small { font-size:0.82rem; color:var(--muted) }
+
+    /* iframe area */
+    .frame-wrap {
+      margin:0 auto; max-width:1100px; width:100%; flex:1; display:flex; flex-direction:column;
+      gap:8px;
+    }
+    .iframe-holder {
+      position:relative; border-radius:10px; overflow:hidden; min-height:380px;
+      border:1px solid rgba(255,255,255,0.03);
+      background: #071028;
+      display:flex; flex-direction:column;
+    }
+    iframe {
+      width:100%; height:100%; border:0; flex:1; background:white;
+    }
+
+    .overlay {
+      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+      background: linear-gradient(180deg, rgba(2,6,23,0.35), rgba(2,6,23,0.6));
+      color:#fff; padding:18px; text-align:center; gap:8px; flex-direction:column;
+      backdrop-filter: blur(6px);
+    }
+    .hidden { display:none; }
+
+    .history {
+      display:flex; gap:6px; flex-wrap:wrap;
+    }
+    .chip { background:rgba(255,255,255,0.03); padding:6px 8px; border-radius:999px; cursor:pointer; color:var(--muted); font-size:0.88rem; border:1px solid rgba(255,255,255,0.02)}
+    .chip:hover{ color:var(--accent) }
+
+    footer { text-align:center; color:var(--muted); font-size:0.85rem; margin-top:6px }
+    @media (max-width:640px){
+      .top{ flex-direction:column; align-items:flex-start }
+      .controls { width:100%; margin-left:0 }
+      .brand { width:100% }
+    }
   </style>
 </head>
 <body>
-  <script type="module">
-    import * as THREE from 'https://cdn.skypack.dev/three@0.150.1';
-    import { GLTFLoader } from 'https://cdn.skypack.dev/three@0.150.1/examples/jsm/loaders/GLTFLoader.js';
+  <div class="top">
+    <div class="brand">
+      <div class="logo">IF</div>
+      <div>
+        <h1>Iframe Host — paste a URL to view</h1>
+        <p class="lead">A simple GitHub Pages friendly iframe viewer. Use responsibly.</p>
+      </div>
+    </div>
 
-    let camera, scene, renderer, gun;
-    let zombies = [];
-    let bullets = [];
+    <div class="controls">
+      <label class="small" title="Toggle sandbox">Sandbox:
+        <input id="sandcheck" type="checkbox" checked style="margin-left:6px">
+      </label>
+    </div>
+  </div>
 
-    init();
+  <div class="card" style="max-width:1100px; margin:0 auto;">
+    <form id="loader" onsubmit="return false;">
+      <input id="url" type="url" placeholder="https://example.com — paste a full URL (include https://)" autocomplete="on" />
+      <button id="go">Load</button>
+      <button id="open" class="ghost" title="Open current URL in new tab">Open ↗</button>
+    </form>
 
-    function init() {
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-      camera.position.set(0, 1.6, 5); // eye height
+    <div class="meta">
+      <div class="small">History:</div>
+      <div class="history" id="hist"></div>
+      <div style="margin-left:auto" class="small">Tip: some sites disallow embedding (X-Frame-Options). If that happens, use "Open ↗".</div>
+    </div>
+  </div>
 
-      renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      document.body.appendChild(renderer.domElement);
+  <div class="frame-wrap" style="max-width:1100px;">
+    <div class="iframe-holder card" id="holder" style="min-height:420px;">
+      <iframe id="frame" srcdoc="<p style='font-family:system-ui;padding:20px;color:#0b1220'>No URL loaded — paste a URL above and click Load.</p>"></iframe>
 
-      // Lighting
-      const light = new THREE.DirectionalLight(0xffffff, 1);
-      light.position.set(5, 10, 7.5);
-      scene.add(light);
+      <div id="overlay" class="overlay hidden" role="alert">
+        <div id="overlayMsg"><strong>Can't embed this site.</strong><div class="small" style="opacity:0.9;margin-top:6px">Many websites block being shown in iframes for security (X-Frame-Options or Content-Security-Policy). You can open it in a new tab.</div></div>
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <a id="overlayOpen" target="_blank" rel="noopener noreferrer"><button>Open in new tab</button></a>
+          <button id="overlayClose" class="ghost">Close</button>
+        </div>
+      </div>
+    </div>
 
-      const ambientLight = new THREE.AmbientLight(0x404040); // soft light
-      scene.add(ambientLight);
+    <footer>
+      This page simply embeds other sites in an iframe. If a site sets X-Frame-Options or CSP frame-ancestors, most browsers will refuse to show it. Use only with sites you control or with permission.
+    </footer>
+  </div>
 
-      // Load gun model
-      const loader = new GLTFLoader();
-      loader.load('models/scene.gltf', gltf => {
-        gun = gltf.scene;
-        gun.scale.set(0.3, 0.3, 0.3);
-        gun.rotation.y = Math.PI; // face forward
-        gun.position.set(0.3, -0.3, -0.7);
-        camera.add(gun);
-      });
+  <script>
+    const urlInput = document.getElementById('url');
+    const goBtn = document.getElementById('go');
+    const openBtn = document.getElementById('open');
+    const frame = document.getElementById('frame');
+    const overlay = document.getElementById('overlay');
+    const overlayOpen = document.getElementById('overlayOpen');
+    const overlayClose = document.getElementById('overlayClose');
+    const histWrap = document.getElementById('hist');
+    const sandcheck = document.getElementById('sandcheck');
 
-      scene.add(camera);
+    const HISTORY_KEY = 'iframe_host_history_v1';
+    const MAX_HISTORY = 8;
 
-      spawnZombie();
-      animate();
+    function normalizeUrl(u){
+      if(!u) return '';
+      u = u.trim();
+      try {
+        // if missing protocol, assume https
+        if(!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(u)) u = 'https://' + u;
+        const parsed = new URL(u);
+        return parsed.href;
+      } catch(e){ return ''; }
     }
 
-    function spawnZombie() {
-      const geometry = new THREE.BoxGeometry(1, 2, 1);
-      const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
-      const zombie = new THREE.Mesh(geometry, material);
-      zombie.position.set((Math.random() - 0.5) * 10, 1, -30);
-      scene.add(zombie);
-      zombies.push(zombie);
-      setTimeout(spawnZombie, 2000);
+    function saveHistory(url){
+      if(!url) return;
+      let list = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+      list = list.filter(x => x !== url);
+      list.unshift(url);
+      if(list.length > MAX_HISTORY) list = list.slice(0, MAX_HISTORY);
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+      renderHistory();
     }
 
-    function shoot() {
-      const geometry = new THREE.SphereGeometry(0.1, 8, 8);
-      const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-      const bullet = new THREE.Mesh(geometry, material);
-      bullet.position.copy(camera.position);
-      bullet.velocity = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).multiplyScalar(0.5);
-      scene.add(bullet);
-      bullets.push(bullet);
+    function renderHistory(){
+      histWrap.innerHTML = '';
+      const list = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+      if(!list.length) { histWrap.innerHTML = '<div class="small" style="opacity:0.6">none yet</div>'; return; }
+      for(const u of list){
+        const c = document.createElement('div');
+        c.className = 'chip';
+        c.textContent = (u.length>36 ? u.slice(0,36)+'…' : u);
+        c.title = u;
+        c.onclick = ()=> { urlInput.value = u; loadUrl(u); };
+        histWrap.appendChild(c);
+      }
     }
 
-    window.addEventListener('click', shoot);
+    function setIframeSrc(url){
+      // set sandbox attribute depending on checkbox
+      if(sandcheck.checked){
+        // restrict some capabilities but allow forms/popups if user wants by unchecking
+        frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin allow-popups');
+      } else {
+        frame.removeAttribute('sandbox');
+      }
 
-    function animate() {
-      requestAnimationFrame(animate);
+      // Use src when possible. For convenience we set src to the normalized url.
+      frame.src = url;
+    }
 
-      bullets.forEach((bullet, i) => {
-        bullet.position.add(bullet.velocity);
-        for (let j = zombies.length - 1; j >= 0; j--) {
-          if (bullet.position.distanceTo(zombies[j].position) < 1) {
-            scene.remove(zombies[j]);
-            scene.remove(bullet);
-            zombies.splice(j, 1);
-            bullets.splice(i, 1);
-            break;
+    async function loadUrl(raw){
+      const normalized = normalizeUrl(raw);
+      if(!normalized){
+        alert('Please enter a valid URL (include https:// or type example.com).');
+        return;
+      }
+      urlInput.value = normalized;
+      overlay.classList.add('hidden');
+      setIframeSrc(normalized);
+      overlayOpen.href = normalized;
+      saveHistory(normalized);
+
+      // Show a friendly note if embedding appears to fail.
+      // It's not always possible to detect reliably across browsers (CORS), so we use a timeout heuristic.
+      let loaded = false;
+      const onLoad = ()=> { loaded = true; /* loaded successfully or browser rendered an error page inside iframe */ };
+      frame.addEventListener('load', onLoad, {once:true});
+
+      // After 1400ms, if frame hasn't signaled anything and looks blank (heuristic), show overlay.
+      setTimeout(()=> {
+        // If loaded true => likely loaded something (may still be an error page inside iframe)
+        if(loaded) return;
+
+        // Another heuristic: if the iframe has a blank about:blank or empty src, show overlay
+        try {
+          // access to contentDocument will fail for cross-origin; that's fine.
+          const doc = frame.contentDocument;
+          if(!doc || doc.body.innerHTML.trim() === '') {
+            // likely blocked or blank
+            overlay.classList.remove('hidden');
+            overlayOpen.href = normalized;
           }
+        } catch(e){
+          // Access denied => cross-origin content loaded (so embedding succeeded). Hide overlay.
+          // But some browsers still block rendering while not giving access — if you see nothing, user can open in new tab.
+          // We'll do nothing here because we can't know for sure.
         }
-
-        if (bullet.position.z < -100 || bullet.position.length() > 200) {
-          scene.remove(bullet);
-          bullets.splice(i, 1);
-        }
-      });
-
-      zombies.forEach(zombie => {
-        zombie.position.z += 0.02;
-      });
-
-      renderer.render(scene, camera);
+      }, 1400);
     }
 
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+    goBtn.addEventListener('click', ()=> loadUrl(urlInput.value) );
+    urlInput.addEventListener('keydown', (e)=> { if(e.key === 'Enter'){ e.preventDefault(); loadUrl(urlInput.value); } });
+    openBtn.addEventListener('click', (e)=> {
+      e.preventDefault();
+      const u = normalizeUrl(urlInput.value);
+      if(!u) { alert('Enter a URL first.'); return;}
+      window.open(u, '_blank', 'noopener');
+    });
+
+    overlayClose.addEventListener('click', ()=> overlay.classList.add('hidden'));
+
+    // initial render
+    renderHistory();
+
+    // optional: if user drops a URL onto page, populate it
+    window.addEventListener('drop', (ev)=>{
+      ev.preventDefault();
+      const t = ev.dataTransfer.getData('text/plain') || ev.dataTransfer.getData('text/uri-list');
+      if(t) urlInput.value = t;
+    });
+    window.addEventListener('dragover', (ev)=> ev.preventDefault());
+
+    // load clipboard URL on first click to help users (permission-dependent)
+    urlInput.addEventListener('focus', async ()=> {
+      if(urlInput.dataset.attempted) return;
+      urlInput.dataset.attempted = '1';
+      try {
+        const text = await navigator.clipboard.readText();
+        if(text && text.startsWith('http')) urlInput.value = text;
+      } catch(e){}
     });
   </script>
 </body>
